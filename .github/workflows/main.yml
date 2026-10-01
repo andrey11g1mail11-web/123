@@ -1,0 +1,125 @@
+import heapq
+from collections import Counter
+
+class Node:
+    """Вузол дерева Хаффмена."""
+    def __init__(self, char, freq):
+        self.char = char
+        self.freq = freq
+        self.left = None
+        self.right = None
+
+    # Оператор порівняння для пріоритетної черги (heapq)
+    def __lt__(self, other):
+        return self.freq < other.freq
+
+def build_huffman_tree(text):
+    """Підрахунок частот та побудова бінарного дерева Хаффмена."""
+    if not text:
+        return None, {}
+
+    frequencies = Counter(text)
+    priority_queue = [Node(char, freq) for char, freq in frequencies.items()]
+    heapq.heapify(priority_queue)
+
+    # Випадок, коли текст складається з однакового символу
+    if len(priority_queue) == 1:
+        root = Node(None, priority_queue[0].freq)
+        root.left = heapq.heappop(priority_queue)
+        return root, frequencies
+
+    # Побудова дерева об'єднанням двох вузлів з найменшою частотою
+    while len(priority_queue) > 1:
+        left = heapq.heappop(priority_queue)
+        right = heapq.heappop(priority_queue)
+
+        merged = Node(None, left.freq + right.freq)
+        merged.left = left
+        merged.right = right
+
+        heapq.heappush(priority_queue, merged)
+
+    return priority_queue[0], frequencies
+
+def generate_huffman_codes(root):
+    """Обхід дерева та генерація двійкових префіксних кодів для кожного символу."""
+    codes = {}
+
+    def _traverse(node, current_code):
+        if node is None:
+            return
+        if node.char is not None:
+            codes[node.char] = current_code or "0"
+            return
+        _traverse(node.left, current_code + "0")
+        _traverse(node.right, current_code + "1")
+
+    _traverse(root, "")
+    return codes
+
+def huffman_encode(text, codes):
+    """Перетворення вхідного тексту в бінарний рядок."""
+    return "".join(codes[char] for char in text)
+
+def huffman_decode(encoded_text, root):
+    """Відновлення вихідного тексту з бінарного рядка за допомогою дерева."""
+    if not encoded_text or root is None:
+        return ""
+
+    decoded_chars = []
+    current_node = root
+    
+    # Специфічний випадок дерева з 1 символом
+    if root.char is None and root.left and root.right is None:
+        return root.left.char * len(encoded_text)
+
+    for bit in encoded_text:
+        current_node = current_node.left if bit == '0' else current_node.right
+        if current_node.char is not None:
+            decoded_chars.append(current_node.char)
+            current_node = root
+
+    return "".join(decoded_chars)
+
+# ----------------- Демонстрація на тексті Державного Гімну -----------------
+
+anthem_text = """Ще не вмерла України і слава, і воля,
+Ще нам, браття молодії, усміхнеться доля.
+Згинуть наші воріженьки, як роса на сонці.
+Запануєм і ми, браття, у своїй сторонці."""
+
+print("=== ВХІДНИЙ ТЕКСТ ===")
+print(anthem_text.strip())
+print("\n" + "=" * 45)
+
+# 1. Побудова дерева та обчислення частот
+root, frequencies = build_huffman_tree(anthem_text)
+
+# 2. Генерація кодів
+codes = generate_huffman_codes(root)
+
+# 3. Виведення кодової таблиці
+print(f"{'Символ':<10} | {'Частота':<8} | {'Код Хаффмена':<15}")
+print("-" * 45)
+# Сортуємо за довжиною коду або частотою
+for char, freq in sorted(frequencies.items(), key=lambda item: item[1], reverse=True):
+    display_char = repr(char) if char in (' ', '\n', '\t') else f"'{char}'"
+    print(f"{display_char:<10} | {freq:<8} | {codes[char]:<15}")
+
+# 4. Кодування
+encoded_bits = huffman_encode(anthem_text, codes)
+
+print("\n=== ДВІЙКОВЕ ПРЕДСТАВЛЕННЯ (перші 120 біт) ===")
+print(encoded_bits[:120] + "...")
+print(f"\nЗагальна довжина закодованого рядка: {len(encoded_bits)} біт")
+
+# 5. Оцінка стиснення
+original_bits_utf8 = len(anthem_text.encode('utf-8')) * 8
+original_bits_fixed = len(anthem_text) * 8  # якщо брати умовні 8 біт на символ
+print(f"Розмір вихідного тексту в UTF-8: {original_bits_utf8} біт")
+print(f"Коефіцієнт стиснення відносно UTF-8: {original_bits_utf8 / len(encoded_bits):.2f}x")
+
+# 6. Перевірка декодування
+decoded_text = huffman_decode(encoded_bits, root)
+assert decoded_text == anthem_text, "Помилка декодування!"
+print("\nДекодування успішне: відновлений текст збігається з початковим на 100%.")
